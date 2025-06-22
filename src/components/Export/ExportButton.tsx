@@ -4,7 +4,11 @@ import { Button } from '@/components/ui/button';
 import { Download } from 'lucide-react';
 import { useUser } from '@/context/UserContext';
 
-export default function ExportButton() {
+interface ExportButtonProps {
+  className?: string;
+}
+
+export default function ExportButton() {  // <- Rimossa props className
   const { user } = useUser();
 
   const handleExport = async (format: 'pdf' | 'csv') => {

@@ -1,37 +1,32 @@
-export type Subscription = {
-  id: string;
-  user_id: string;
+export interface Subscription {
+  id?: string;
+  user_id?: string;
   name: string;
   description?: string;
   category_id: string;
   start_date: string;
-  end_date: string;
+  end_date?: string;
   duration: string;
   billing_cycle: string;
   cost: number;
   currency_id: string;
   recurring: boolean;
-  status: 'active' | 'canceled' | 'expired';
+  status?: 'active' | 'canceled' | 'expired';
   date_canceled?: string;
-  reminder_days: number;
-  created_at: string;
-  updated_at: string;
-};
+  reminder_days?: number;
+  created_at?: string;
+  updated_at?: string;
+}
 
-export type Category = {
+export interface Category {
   id: string;
   name: string;
   description?: string;
-  is_active: boolean;
-  created_at: string;
-  updated_at: string;
-};
+}
 
-export type Currency = {
+export interface Currency {
   id: string;
   code: string;
   symbol: string;
   name: string;
-  created_at: string;
-  updated_at: string;
-};
+}

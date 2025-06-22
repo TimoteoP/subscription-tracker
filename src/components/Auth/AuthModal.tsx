@@ -1,8 +1,11 @@
+"use client";
+
 import { useEffect, useState } from 'react';
 import { Auth } from '@supabase/auth-ui-react';
 import { ThemeSupa } from '@supabase/auth-ui-shared';
 import { supabase } from '@/lib/supabase/client';
 import Modal from './Modal';
+import type { Session } from '@supabase/supabase-js'; // Aggiungi questo import
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -10,7 +13,7 @@ interface AuthModalProps {
 }
 
 export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
-  const [session, setSession] = useState<any>(null);
+  const [_, setSession] = useState<Session | null>(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
