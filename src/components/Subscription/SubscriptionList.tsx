@@ -27,7 +27,8 @@ export default async function SubscriptionList({ userId }: SubscriptionListProps
 
   // Funzione per il colore dello stato
   const getStatusStyle = (subscription: Subscription) => {
-    const daysLeft = differenceInDays(new Date(subscription.end_date), new Date());
+    const endDate = subscription.end_date ?? subscription.start_date; // fallback se manca
+    const daysLeft = differenceInDays(new Date(endDate), new Date());
     
     if (subscription.status === 'canceled') return 'bg-gray-50';
     if (daysLeft <= 7) return 'bg-red-50';
@@ -71,11 +72,29 @@ export default async function SubscriptionList({ userId }: SubscriptionListProps
               <TableCell>
                 ${subscription.cost.toFixed(2)} ({subscription.billing_cycle})
               </TableCell>
-              <TableCell>{format(new Date(subscription.start_date), 'MMM d, yyyy')}</TableCell>
-              <TableCell>{format(new Date(subscription.end_date), 'MMM d, yyyy')}</TableCell>
-              <TableCell>
-                {differenceInDays(new Date(subscription.end_date), new Date())}
-              </TableCell>
+              {/* start date: è sempre presente */}
+          <TableCell>
+            {format(new Date(subscription.start_date), 'MMM d, yyyy')}
+          </TableCell>
+
+          {/* end date: se undefined uso lo stesso start_date come fallback */}
+          <TableCell>
+            {format(
+              new Date(subscription.end_date ?? subscription.start_date),
+              'MMM d, yyyy'
+            )}
+          </TableCell>
+
+          {/* days left: calcolo su endDate fissato, mai negativo */}
+          <TableCell>
+            {Math.max(
+              0,
+              differenceInDays(
+                new Date(subscription.end_date ?? subscription.start_date),
+                new Date()
+              )
+            )}
+          </TableCell>
               <TableCell>
                 <span className={`px-2 py-1 rounded-full text-xs ${
                   subscription.status === 'active' 
