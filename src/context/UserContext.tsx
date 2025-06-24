@@ -1,9 +1,18 @@
-'use client';
+"use client";
 
-import { createContext, useContext, useEffect, useState } from 'react';
-import { supabase } from '@/lib/supabase/client';
-import type { Session, User } from '@supabase/supabase-js';
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  type ReactNode,
+} from "react";
+import { createBrowserClient } from "@supabase/ssr";
+import type { Session, User } from "@supabase/supabase-js";
 
+/* ------------------------------------------------------------------ */
+/* Tipi                                                                */
+/* ------------------------------------------------------------------ */
 type UserContextType = {
   user: User | null;
   session: Session | null;
@@ -18,42 +27,62 @@ const UserContext = createContext<UserContextType>({
   signOut: async () => {},
 });
 
-export const UserProvider = ({ children }: { children: React.ReactNode }) => {
+/* ------------------------------------------------------------------ */
+/* Provider                                                            */
+/* ------------------------------------------------------------------ */
+export function UserProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  /* 1️⃣  Crea il client Supabase per il browser */
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
+
+  /* 2️⃣  One-shot: leggi la sessione se già esiste */
   useEffect(() => {
-    const fetchSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      setSession(session);
-      setUser(session?.user ?? null);
-      setIsLoading(false);
-    };
+    supabase.auth
+      .getSession()
+      .then(({ data }) => {
+        setSession(data.session);
+        setUser(data.session?.user ?? null);
+      })
+      .finally(() => setIsLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // esegui solo al mount
 
-    fetchSession();
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      setUser(session?.user ?? null);
+  /* 3️⃣  Listener: aggiorna stato quando la sessione cambia */
+  useEffect(() => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, newSession) => {
+      setSession(newSession);
+      setUser(newSession?.user ?? null);
       setIsLoading(false);
     });
 
-    return () => subscription.unsubscribe();
-  }, []);
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [supabase]);
 
-  const value = {
-    user,
-    session,
-    isLoading,
-    signOut: async () => {
-      await supabase.auth.signOut();
-      setSession(null);
-      setUser(null);
-    },
+  /* 4️⃣  Funzione di logout */
+  const signOut = async () => {
+    await supabase.auth.signOut();
+    setSession(null);
+    setUser(null);
   };
 
-  return <UserContext.Provider value={value}>{children}</UserContext.Provider>;
-};
+  return (
+    <UserContext.Provider value={{ user, session, isLoading, signOut }}>
+      {children}
+    </UserContext.Provider>
+  );
+}
 
+/* ------------------------------------------------------------------ */
+/* Hook di utilità                                                     */
+/* ------------------------------------------------------------------ */
 export const useUser = () => useContext(UserContext);

@@ -1,6 +1,14 @@
 import { supabase } from './client';
 import type { Subscription, Category, Currency } from '@/types';
 
+// ❌ OLD VERSION - fetched ALL subscriptions
+// export const fetchSubscriptions = async (): Promise<Subscription[]> => {
+//   const { data, error } = await supabase
+//     .from('subscriptions')
+//     .select('*')
+//     .order('end_date', { ascending: true });
+
+// ✅ NEW VERSION - automatically filtered by RLS based on current user
 export const fetchSubscriptions = async (): Promise<Subscription[]> => {
   const { data, error } = await supabase
     .from('subscriptions')
@@ -12,7 +20,23 @@ export const fetchSubscriptions = async (): Promise<Subscription[]> => {
     throw error;
   }
 
-  return data || []; // Restituisce array vuoto se data è null
+  return data || [];
+};
+
+// If you want to be extra explicit about user filtering (though RLS should handle this):
+export const fetchUserSubscriptions = async (userId: string): Promise<Subscription[]> => {
+  const { data, error } = await supabase
+    .from('subscriptions')
+    .select('*')
+    .eq('user_id', userId)
+    .order('end_date', { ascending: true });
+
+  if (error) {
+    console.error('Error fetching user subscriptions:', error);
+    throw error;
+  }
+
+  return data || [];
 };
 
 export const fetchSubscriptionById = async (id: string): Promise<Subscription> => {
@@ -37,10 +61,18 @@ export const fetchSubscriptionById = async (id: string): Promise<Subscription> =
 export const createSubscription = async (
   subscription: Omit<Subscription, 'id' | 'created_at' | 'updated_at'>
 ): Promise<Subscription> => {
+  // Get current user to ensure user_id is set
+  const { data: { user } } = await supabase.auth.getUser();
+  
+  if (!user) {
+    throw new Error('User not authenticated');
+  }
+
   const { data, error } = await supabase
     .from('subscriptions')
     .insert({
       ...subscription,
+      user_id: user.id, // Ensure user_id is always set
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     })
@@ -61,7 +93,7 @@ export const createSubscription = async (
 
 export const updateSubscription = async (
   id: string, 
-  updates: Partial<Omit<Subscription, 'id' | 'created_at'>>
+  updates: Partial<Omit<Subscription, 'id' | 'created_at' | 'user_id'>>
 ): Promise<Subscription> => {
   const { data, error } = await supabase
     .from('subscriptions')
