@@ -9,7 +9,7 @@ import { format, addDays, addMonths, addYears } from "date-fns";
 import { fetchCategories, fetchCurrencies } from "@/lib/supabase/db";
 import type { Subscription, Category, Currency } from "@/types";
 
-/* ---------------------------- ZOD SCHEMA ---------------------------- */
+/* ---------------- ZOD SCHEMA ---------------- */
 const subscriptionSchema = z.object({
   name: z.string().min(1, "Name is required"),
   description: z.string().optional(),
@@ -46,18 +46,18 @@ export default function SubscriptionForm({
   onSubmit,
   onCancel,
 }: SubscriptionFormProps) {
-  /* ---------------- stato local ---------------- */
   const [categories, setCategories] = useState<Category[]>([]);
   const [currencies, setCurrencies] = useState<Currency[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  /* ---------------- useForm (UNO solo) --------- */
+  // --- Form handling
   const {
     register,
     handleSubmit,
+    watch,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
-    resolver: zodResolver(subscriptionSchema),   // ✅ nessun generic extra
+    resolver: zodResolver(subscriptionSchema),
     defaultValues: {
       name: subscription?.name ?? "",
       description: subscription?.description ?? "",
@@ -74,7 +74,9 @@ export default function SubscriptionForm({
     },
   });
 
-  /* ---------------- helper date --------------- */
+  // --- Calculate end date live
+  const startDate = watch("start_date");
+  const duration = watch("duration");
   const calcEnd = (s: string, d: FormValues["duration"]) => {
     const dt = new Date(s);
     switch (d) {
@@ -93,7 +95,7 @@ export default function SubscriptionForm({
     }
   };
 
-  /* ------------- carica categorie / valute ---- */
+  // --- Load categories/currencies
   useEffect(() => {
     (async () => {
       try {
@@ -108,20 +110,19 @@ export default function SubscriptionForm({
     })();
   }, []);
 
-  /* ---------------- submit handler ------------- */
+  // --- Submit handler
   const onSubmitHandler: SubmitHandler<FormValues> = async (data) => {
     const end_date = calcEnd(data.start_date, data.duration);
     await onSubmit({ ...data, end_date });
   };
 
-  /* ---------------- rendering ------------------ */
   if (isLoading) return <div>Loading form data…</div>;
 
   return (
     <form onSubmit={handleSubmit(onSubmitHandler)} className="space-y-6 max-w-xl">
-      {/* ======= NAME ======= */}
+      {/* Name */}
       <div>
-        <label htmlFor="name" className="block text-sm font-medium mb-1">Name</label>
+        <label htmlFor="name" className="block text-sm font-medium mb-1">Abbonamento</label>
         <input
           id="name"
           type="text"
@@ -131,9 +132,9 @@ export default function SubscriptionForm({
         {errors.name && <p className="text-red-600 text-sm mt-1">{errors.name.message}</p>}
       </div>
 
-      {/* ======= COST (come esempio) ======= */}
+      {/* Cost */}
       <div>
-        <label htmlFor="cost" className="block text-sm font-medium mb-1">Cost</label>
+        <label htmlFor="cost" className="block text-sm font-medium mb-1">Costo</label>
         <input
           id="cost"
           type="number"
@@ -144,8 +145,143 @@ export default function SubscriptionForm({
         {errors.cost && <p className="text-red-600 text-sm mt-1">{errors.cost.message}</p>}
       </div>
 
-      {/* --- Altri campi identici… (categoria, date, ecc.) --- */}
+      {/* Categoria */}
+      <div>
+        <label htmlFor="category_id" className="block text-sm font-medium mb-1">Categoria</label>
+        <select
+          id="category_id"
+          {...register("category_id")}
+          className="w-full rounded-md border px-3 py-2"
+        >
+          <option value="">Seleziona categoria</option>
+          {categories.map((cat) => (
+            <option key={cat.id} value={cat.id}>{cat.name}</option>
+          ))}
+        </select>
+        {errors.category_id && <p className="text-red-600 text-sm mt-1">{errors.category_id.message}</p>}
+      </div>
 
+      {/* Valuta */}
+      <div>
+        <label htmlFor="currency_id" className="block text-sm font-medium mb-1">Valuta</label>
+        <select
+          id="currency_id"
+          {...register("currency_id")}
+          className="w-full rounded-md border px-3 py-2"
+        >
+          <option value="">Seleziona valuta</option>
+          {currencies.map((cur) => (
+            <option key={cur.id} value={cur.id}>{cur.name}</option>
+          ))}
+        </select>
+        {errors.currency_id && <p className="text-red-600 text-sm mt-1">{errors.currency_id.message}</p>}
+      </div>
+
+      {/* Start date */}
+      <div>
+        <label htmlFor="start_date" className="block text-sm font-medium mb-1">Data inizio</label>
+        <input
+          id="start_date"
+          type="date"
+          {...register("start_date")}
+          className="w-full rounded-md border px-3 py-2"
+        />
+        {errors.start_date && <p className="text-red-600 text-sm mt-1">{errors.start_date.message}</p>}
+      </div>
+
+      {/* Durata */}
+      <div>
+        <label htmlFor="duration" className="block text-sm font-medium mb-1">Durata</label>
+        <select
+          id="duration"
+          {...register("duration")}
+          className="w-full rounded-md border px-3 py-2"
+        >
+          <option value="">Seleziona durata</option>
+          <option value="7d">7 giorni</option>
+          <option value="30d">30 giorni</option>
+          <option value="45d">45 giorni</option>
+          <option value="60d">60 giorni</option>
+          <option value="90d">90 giorni</option>
+          <option value="6m">6 mesi</option>
+          <option value="1y">1 anno</option>
+          <option value="2y">2 anni</option>
+          <option value="3y">3 anni</option>
+          <option value="4y">4 anni</option>
+          <option value="5y">5 anni</option>
+        </select>
+        {errors.duration && <p className="text-red-600 text-sm mt-1">{errors.duration.message}</p>}
+      </div>
+
+      {/* Ciclo di fatturazione */}
+      <div>
+        <label htmlFor="billing_cycle" className="block text-sm font-medium mb-1">Ciclo di fatturazione</label>
+        <select
+          id="billing_cycle"
+          {...register("billing_cycle")}
+          className="w-full rounded-md border px-3 py-2"
+        >
+          <option value="">Seleziona ciclo</option>
+          <option value="monthly">Mensile</option>
+          <option value="quarterly">Trimestrale</option>
+          <option value="annual">Annuale</option>
+          <option value="biennial">Biennale</option>
+          <option value="triennial">Triennale</option>
+          <option value="one-time">Una tantum</option>
+        </select>
+        {errors.billing_cycle && <p className="text-red-600 text-sm mt-1">{errors.billing_cycle.message}</p>}
+      </div>
+
+      {/* Descrizione (opzionale) */}
+      <div>
+        <label htmlFor="description" className="block text-sm font-medium mb-1">Descrizione (opzionale)</label>
+        <textarea
+          id="description"
+          {...register("description")}
+          className="w-full rounded-md border px-3 py-2"
+          rows={2}
+        />
+      </div>
+
+      {/* End date (calcolata) */}
+      <div>
+        <label className="block text-sm font-medium mb-1">Data di fine (calcolata)</label>
+        <input
+          type="text"
+          value={calcEnd(startDate, duration)}
+          readOnly
+          className="w-full rounded-md border px-3 py-2 bg-gray-50"
+        />
+      </div>
+
+      {/* Reminder days */}
+      <div>
+        <label htmlFor="reminder_days" className="block text-sm font-medium mb-1">
+          Giorni di preavviso promemoria (1-30)
+        </label>
+        <input
+          id="reminder_days"
+          type="number"
+          min={1}
+          max={30}
+          {...register("reminder_days", { valueAsNumber: true })}
+          className="w-full rounded-md border px-3 py-2"
+        />
+        {errors.reminder_days && <p className="text-red-600 text-sm mt-1">{errors.reminder_days.message}</p>}
+      </div>
+
+      {/* Ricorrente */}
+      <div className="flex items-center">
+        <input
+          id="recurring"
+          type="checkbox"
+          {...register("recurring")}
+          className="mr-2"
+        />
+        <label htmlFor="recurring" className="text-sm font-medium">Abbonamento ricorrente</label>
+      </div>
+
+      {/* Submit / Cancel */}
       <div className="flex justify-end space-x-2">
         <button
           type="button"
