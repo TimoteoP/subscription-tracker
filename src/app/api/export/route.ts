@@ -84,7 +84,7 @@ export async function GET(request: Request) {
           `Status: ${sub.status}`,
           `Cost: $${sub.cost.toFixed(2)} ${sub.billing_cycle}`,
           `Start: ${new Date(sub.start_date).toLocaleDateString()}`,
-          `End: ${new Date(sub.end_date).toLocaleDateString()}`,
+          `End: ${new Date(sub.end_date ?? sub.start_date).toLocaleDateString()}`,
         ].join(' - ');
 
         if (y < 50) {
@@ -124,7 +124,7 @@ export async function GET(request: Request) {
         categoryMap[sub.category_id] || 'Unknown',
         sub.description || '',
         new Date(sub.start_date).toISOString().split('T')[0],
-        new Date(sub.end_date).toISOString().split('T')[0],
+        new Date(sub.end_date ?? sub.start_date).toISOString().split('T')[0],
         sub.cost.toString(),
         sub.billing_cycle,
         sub.status,

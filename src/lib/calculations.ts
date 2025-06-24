@@ -27,7 +27,9 @@ export function getExpiringSoon(subscriptions: Subscription[], daysThreshold: nu
   return subscriptions.filter(sub => {
     if (sub.status !== 'active') return false;
     
-    const daysLeft = differenceInDays(new Date(sub.end_date), today);
+    if (!sub.end_date && !sub.start_date) return false; // oppure gestisci caso senza date
+    const endDate = sub.end_date ?? sub.start_date;
+    const daysLeft = differenceInDays(new Date(endDate), today);
     return daysLeft > 0 && daysLeft <= daysThreshold;
   });
 }
