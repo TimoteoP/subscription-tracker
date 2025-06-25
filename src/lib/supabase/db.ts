@@ -61,10 +61,8 @@ export const fetchSubscriptionById = async (id: string): Promise<Subscription> =
 export const createSubscription = async (
   subscription: Omit<Subscription, 'id' | 'created_at' | 'updated_at'>
 ): Promise<Subscription> => {
-  // Get current user to ensure user_id is set
-  const { data: { user } } = await supabase.auth.getUser();
-  
-  if (!user) {
+  // Usa direttamente l'user_id passato dal componente chiamante
+  if (!subscription.user_id) {
     throw new Error('User not authenticated');
   }
 
@@ -72,7 +70,6 @@ export const createSubscription = async (
     .from('subscriptions')
     .insert({
       ...subscription,
-      user_id: user.id, // Ensure user_id is always set
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     })
