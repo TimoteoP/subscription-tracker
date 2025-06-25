@@ -1,5 +1,5 @@
 "use client";
-
+import { supabase } from '@/lib/supabase/client';
 import {
   createContext,
   useContext,
@@ -7,7 +7,6 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { createBrowserClient } from "@supabase/ssr";
 import type { Session, User } from "@supabase/supabase-js";
 
 /* ------------------------------------------------------------------ */
@@ -34,12 +33,6 @@ export function UserProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-
-  /* 1️⃣  Crea il client Supabase per il browser */
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
 
   /* 2️⃣  One-shot: leggi la sessione se già esiste */
   useEffect(() => {
