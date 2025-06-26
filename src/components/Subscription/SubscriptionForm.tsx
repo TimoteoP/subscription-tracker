@@ -4,8 +4,7 @@ import { useEffect, useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm, type SubmitHandler } from "react-hook-form";
 import { z } from "zod";
-import { format, addDays, addMonths, addYears } from "date-fns";
-
+import { format, addMonths, addYears, setDate, isPast } from "date-fns";
 import { fetchCategories } from "@/lib/supabase/db";
 import type { Subscription, Category } from "@/types";
 import { Loader2 } from "lucide-react";
@@ -15,24 +14,20 @@ const subscriptionSchema = z.object({
   name: z.string().min(1, "Name is required"),
   description: z.string().optional(),
   category_id: z.string().min(1, "Category is required"),
-  start_date: z.string().min(1, "Start date is required"),
-  duration: z.enum([
-    "7d", "30d", "45d", "60d", "90d",
-    "6m", "1y", "2y", "3y", "4y", "5y",
-  ]),
+  first_payment_date: z.string().min(1, "First payment date is required"),
   billing_cycle: z.enum([
     "monthly", "quarterly", "annual",
     "biennial", "triennial", "one-time",
   ]),
   cost: z.preprocess(
-    (v) => (v === "" ? 0 : Number(v)), // Gestisce il caso di campo vuoto
-    z.number().min(0.01, "Cost must be positive")
+    (v) => (v === "" ? undefined : Number(v)),
+    z.number({ required_error: "Cost is required" }).min(0.01, "Cost must be a positive number")
   ),
-  recurring: z.boolean().default(true),
   reminder_days: z.preprocess(
     (v) => Number(v),
     z.number().min(1).max(30).default(7)
   ),
+  start_date: z.string().optional(),
   end_date: z.string().optional(),
 });
 
@@ -40,9 +35,60 @@ type FormValues = z.infer<typeof subscriptionSchema>;
 
 interface SubscriptionFormProps {
   subscription?: Partial<Subscription>;
-  onSubmit: (values: FormValues) => Promise<void>;
+  onSubmit: (values: Omit<FormValues, 'first_payment_date'> & { start_date: string, end_date: string }) => Promise<void>;
   onCancel: () => void;
 }
+
+const calculateNextBillingCycle = (firstDateStr: string, cycle: FormValues["billing_cycle"]): { startDate: string, endDate: string } => {
+    if (!firstDateStr || !cycle) return { startDate: "", endDate: "" };
+    
+    try {
+        const today = new Date();
+        const firstDate = new Date(firstDateStr);
+        if (isNaN(firstDate.getTime())) return { startDate: "", endDate: "" };
+        
+        if (cycle === 'one-time') {
+            const formattedDate = format(firstDate, "yyyy-MM-dd");
+            return { startDate: formattedDate, endDate: formattedDate };
+        }
+
+        const dayOfMonth = firstDate.getDate();
+        let nextBillingDate = setDate(new Date(), dayOfMonth);
+
+        const getIncrement = () => {
+            switch(cycle) {
+                case 'monthly': return { months: 1 };
+                case 'quarterly': return { months: 3 };
+                case 'annual': return { years: 1 };
+                case 'biennial': return { years: 2 };
+                case 'triennial': return { years: 3 };
+                default: return { months: 0 };
+            }
+        }
+
+        while (isPast(nextBillingDate) && !isSameDay(nextBillingDate, today)) {
+            const { months = 0, years = 0 } = getIncrement();
+            nextBillingDate = addMonths(nextBillingDate, months);
+            nextBillingDate = addYears(nextBillingDate, years);
+        }
+        
+        const { months = 0, years = 0 } = getIncrement();
+        const cycleStartDate = addMonths(addYears(nextBillingDate, -years), -months);
+        
+        return {
+            startDate: format(cycleStartDate, "yyyy-MM-dd"),
+            endDate: format(nextBillingDate, "yyyy-MM-dd")
+        };
+    } catch {
+        return { startDate: "", endDate: "" };
+    }
+};
+
+const isSameDay = (date1: Date, date2: Date) =>
+    date1.getFullYear() === date2.getFullYear() &&
+    date1.getMonth() === date2.getMonth() &&
+    date1.getDate() === date2.getDate();
+
 
 export default function SubscriptionForm({
   subscription,
@@ -63,43 +109,23 @@ export default function SubscriptionForm({
       name: subscription?.name ?? "",
       description: subscription?.description ?? "",
       category_id: subscription?.category_id ?? "",
-      start_date: subscription?.start_date
+      first_payment_date: subscription?.start_date
         ? format(new Date(subscription.start_date), "yyyy-MM-dd")
         : format(new Date(), "yyyy-MM-dd"),
-      duration: (subscription?.duration as FormValues["duration"]) ?? "1y",
       billing_cycle: (subscription?.billing_cycle as FormValues["billing_cycle"]) ?? "monthly",
-      cost: subscription?.cost ?? 0,
-      recurring: subscription?.recurring ?? true,
+      cost: subscription?.cost ?? undefined,
       reminder_days: subscription?.reminder_days ?? 7,
     },
   });
 
-  const startDate = watch("start_date");
-  const duration = watch("duration");
+  const firstPaymentDate = watch("first_payment_date");
+  const billingCycle = watch("billing_cycle");
   
-  const calcEnd = (s: string, d: FormValues["duration"]) => {
-    if (!s || !d) return "Seleziona data e durata";
-    const dt = new Date(s);
-    if (isNaN(dt.getTime())) return "Data di inizio non valida";
-
-    switch (d) {
-      case "7d": return format(addDays(dt, 7), "yyyy-MM-dd");
-      case "30d": return format(addDays(dt, 30), "yyyy-MM-dd");
-      case "45d": return format(addDays(dt, 45), "yyyy-MM-dd");
-      case "60d": return format(addDays(dt, 60), "yyyy-MM-dd");
-      case "90d": return format(addDays(dt, 90), "yyyy-MM-dd");
-      case "6m": return format(addMonths(dt, 6), "yyyy-MM-dd");
-      case "1y": return format(addYears(dt, 1), "yyyy-MM-dd");
-      case "2y": return format(addYears(dt, 2), "yyyy-MM-dd");
-      case "3y": return format(addYears(dt, 3), "yyyy-MM-dd");
-      case "4y": return format(addYears(dt, 4), "yyyy-MM-dd");
-      case "5y": return format(addYears(dt, 5), "yyyy-MM-dd");
-      default:   return format(dt, "yyyy-MM-dd");
-    }
-  };
+  const { startDate: calculatedStartDate, endDate: calculatedEndDate } = calculateNextBillingCycle(firstPaymentDate, billingCycle);
 
   useEffect(() => {
     (async () => {
+      setIsLoadingLookups(true);
       try {
         const cats = await fetchCategories();
         setCategories(cats);
@@ -112,87 +138,112 @@ export default function SubscriptionForm({
   }, []);
 
   const onSubmitHandler: SubmitHandler<FormValues> = async (data) => {
-    const end_date = calcEnd(data.start_date, data.duration);
-    await onSubmit({ ...data, end_date });
+    const { endDate } = calculateNextBillingCycle(data.first_payment_date, data.billing_cycle);
+    await onSubmit({
+        ...data,
+        start_date: data.first_payment_date, 
+        end_date: endDate
+    });
   };
 
   if (isLoadingLookups) return <div>Loading form data…</div>;
 
   return (
-    <form onSubmit={handleSubmit(onSubmitHandler)} className="space-y-6 max-w-xl">
-      {/* ... TUTTI I CAMPI DEL FORM RIMANGONO UGUALI ... */}
-      
-      {/* Name */}
-      <div>
-        <label htmlFor="name" className="block text-sm font-medium mb-1">Abbonamento</label>
-        <input
-          id="name"
-          type="text"
-          {...register("name")}
-          className="w-full rounded-md border px-3 py-2"
-          disabled={isSubmitting}
-        />
-        {errors.name && <p className="text-red-600 text-sm mt-1">{errors.name.message}</p>}
-      </div>
+    <form onSubmit={handleSubmit(onSubmitHandler)} className="space-y-4 max-w-xl">
+        {/* Name */}
+        <div>
+            <label htmlFor="name" className="block text-sm font-medium mb-1">Nome Abbonamento</label>
+            <input id="name" type="text" {...register("name")} className="w-full rounded-md border px-3 py-2" disabled={isSubmitting} />
+            {errors.name && <p className="text-red-600 text-sm mt-1">{errors.name.message}</p>}
+        </div>
 
-      {/* Cost */}
-      <div>
-        <label htmlFor="cost" className="block text-sm font-medium mb-1">Costo</label>
-        <input
-          id="cost"
-          type="number"
-          step="0.01"
-          {...register("cost")}
-          className="w-full rounded-md border px-3 py-2"
-          disabled={isSubmitting}
-        />
-        {errors.cost && <p className="text-red-600 text-sm mt-1">{errors.cost.message}</p>}
-      </div>
+        {/* Description */}
+        <div>
+            <label htmlFor="description" className="block text-sm font-medium mb-1">Descrizione (opzionale)</label>
+            <textarea id="description" {...register("description")} className="w-full rounded-md border px-3 py-2" rows={3} disabled={isSubmitting} />
+        </div>
 
-      {/* Categoria */}
-      <div>
-        <label htmlFor="category_id" className="block text-sm font-medium mb-1">Categoria</label>
-        <select
-          id="category_id"
-          {...register("category_id")}
-          className="w-full rounded-md border px-3 py-2"
-          disabled={isSubmitting}
-        >
-          <option value="">Seleziona categoria</option>
-          {categories.map((cat) => (
-            <option key={cat.id} value={cat.id}>{cat.name}</option>
-          ))}
-        </select>
-        {errors.category_id && <p className="text-red-600 text-sm mt-1">{errors.category_id.message}</p>}
-      </div>
-      
-      {/* ... ALTRI CAMPI DEL FORM ... */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Cost */}
+            <div>
+                <label htmlFor="cost" className="block text-sm font-medium mb-1">Costo</label>
+                <input id="cost" type="number" step="0.01" {...register("cost")} className="w-full rounded-md border px-3 py-2" disabled={isSubmitting} />
+                {errors.cost && <p className="text-red-600 text-sm mt-1">{errors.cost.message}</p>}
+            </div>
 
-      {/* 💡 MODIFICA QUI SOTTO: La sezione dei pulsanti */}
-      <div className="flex justify-end space-x-2 pt-4">
-        <button
-          type="button"
-          onClick={onCancel}
-          disabled={isSubmitting}
-          className="px-4 py-2 text-sm bg-gray-100 rounded hover:bg-gray-200 disabled:opacity-50"
-        >
-          Cancel
-        </button>
-        <button
-          type="submit"
-          disabled={isSubmitting}
-          className="px-4 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 flex items-center"
-        >
-          {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          {isSubmitting
-            ? "Saving…"
-            : subscription
-            ? "Update Subscription"
-            : "Create Subscription"}
-        </button>
+            {/* Category */}
+            <div>
+                <label htmlFor="category_id" className="block text-sm font-medium mb-1">Categoria</label>
+                <select id="category_id" {...register("category_id")} className="w-full rounded-md border px-3 py-2" disabled={isSubmitting}>
+                    <option value="">Seleziona categoria</option>
+                    {categories.map((cat) => (<option key={cat.id} value={cat.id}>{cat.name}</option>))}
+                </select>
+                {errors.category_id && <p className="text-red-600 text-sm mt-1">{errors.category_id.message}</p>}
+            </div>
+        </div>
+
+        <hr className="my-2"/>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* First Payment Date */}
+            <div>
+                <label htmlFor="first_payment_date" className="block text-sm font-medium mb-1">Data Primo Pagamento</label>
+                <input id="first_payment_date" type="date" {...register("first_payment_date")} className="w-full rounded-md border px-3 py-2" disabled={isSubmitting} />
+                <p className="text-xs text-gray-500 mt-1">La data del tuo primo pagamento in assoluto.</p>
+                {errors.first_payment_date && <p className="text-red-600 text-sm mt-1">{errors.first_payment_date.message}</p>}
+            </div>
+
+            {/* Billing Cycle */}
+            <div>
+                <label htmlFor="billing_cycle" className="block text-sm font-medium mb-1">Ciclo di Fatturazione</label>
+                <select id="billing_cycle" {...register("billing_cycle")} className="w-full rounded-md border px-3 py-2" disabled={isSubmitting}>
+                    <option value="monthly">Mensile</option>
+                    <option value="quarterly">Trimestrale</option>
+                    <option value="annual">Annuale</option>
+                    <option value="biennial">Biennale</option>
+                    <option value="triennial">Triennale</option>
+                    <option value="one-time">Una tantum</option>
+                </select>
+                {errors.billing_cycle && <p className="text-red-600 text-sm mt-1">{errors.billing_cycle.message}</p>}
+            </div>
+        </div>
+
+        {/* Reminder Days */}
+        <div>
+            <label htmlFor="reminder_days" className="block text-sm font-medium mb-1">Giorni di Promemoria prima della Scadenza</label>
+            <input id="reminder_days" type="number" min="1" max="30" {...register("reminder_days")} className="w-full rounded-md border px-3 py-2" disabled={isSubmitting} />
+            {errors.reminder_days && <p className="text-red-600 text-sm mt-1">{errors.reminder_days.message}</p>}
+        </div>
+
+        {/* Visualizzazione Date Calcolate */}
+        <div className="p-3 bg-gray-50 rounded-md border space-y-2">
+            <h4 className="font-medium text-sm text-gray-800">Prossimo Ciclo di Fatturazione Calcolato</h4>
+            {calculatedStartDate && calculatedEndDate ? (
+                <p className="text-sm text-gray-600">
+                    L'abbonamento sarà considerato attivo dal <span className="font-semibold">{format(new Date(calculatedStartDate), 'd MMM yyyy')}</span> al <span className="font-semibold">{format(new Date(calculatedEndDate), 'd MMM yyyy')}</span>.
+                </p>
+            ) : <p className="text-sm text-gray-500">Inserisci i dati per calcolare il ciclo.</p>}
+        </div>
+
+        {/* Pulsanti Submit / Cancel */}
+        <div className="flex justify-end space-x-3 pt-4 border-t mt-6">
+            <button type="button" onClick={onCancel} disabled={isSubmitting} className="px-4 py-2 text-sm bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 disabled:opacity-50">
+                Cancel
+            </button>
+            <button type="submit" disabled={isSubmitting} className="px-5 py-2 text-sm font-semibold bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:bg-blue-400 flex items-center justify-center min-w-[150px]">
+            {isSubmitting ? (
+                <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Saving...
+                </>
+            ) : subscription ? (
+                "Update Subscription"
+            ) : (
+                "Create Subscription"
+            )}
+            </button>
       </div>
     </form>
   );
 }
-
 
