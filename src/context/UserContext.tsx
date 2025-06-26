@@ -31,8 +31,10 @@ export function UserProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
+    console.log("UserProvider: useEffect sta partendo."); // <-- LOG 1
     // 1. Ottieni la sessione corrente
     supabase.auth.getSession().then(({ data: { session } }) => {
+      console.log("UserProvider: getSession completato.", session); // <-- LOG 2
       setSession(session);
       setUser(session?.user ?? null);
       setIsLoading(false);
@@ -41,6 +43,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
     // 2. Ascolta i cambiamenti futuri (es. LOGOUT)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (_event, session) => {
+        console.log("UserProvider: onAuthStateChange ricevuto!", _event, session); // <-- LOG 3
         setSession(session);
         setUser(session?.user ?? null);
         setIsLoading(false);
@@ -63,7 +66,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
     isLoading,
     signOut,
   };
-
+  console.log("UserProvider: Rendering con stato:", value); // <-- LOG 4
   return (
     <UserContext.Provider value={value}>
       {children}
