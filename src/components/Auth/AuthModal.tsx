@@ -53,17 +53,29 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
         <h2 className="mb-4 text-xl font-bold">Log in / Sign up</h2>
 
         {/* form di esempio: una sola email per magic-link */}
+
         <form
           onSubmit={async (e) => {
             e.preventDefault();
             const email = (e.currentTarget.elements.namedItem(
               "email"
             ) as HTMLInputElement).value;
-            const { error } = await supabase.auth.signInWithOtp({ email });
+            
+            // --- MODIFICA QUI ---
+            const { error } = await supabase.auth.signInWithOtp({ 
+              email,
+              options: {
+                // Dice a Supabase di reindirizzare qui dopo il click sulla mail
+                emailRedirectTo: `${window.location.origin}/auth/callback`,
+              }
+            });
+            // --- FINE MODIFICA ---
+
             if (error) alert(error.message);
             else alert("Check your mail for the magic link!");
           }}
         >
+
           <input
             type="email"
             name="email"
