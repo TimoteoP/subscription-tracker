@@ -9,7 +9,6 @@ export interface Subscription {
   duration: string;
   billing_cycle: string;
   cost: number;
-  currency_id: string;
   recurring: boolean;
   status?: 'active' | 'canceled' | 'expired';
   date_canceled?: string;
@@ -22,11 +21,4 @@ export interface Category {
   id: string;
   name: string;
   description?: string;
-}
-
-export interface Currency {
-  id: string;
-  code: string;
-  symbol: string;
-  name: string;
 }

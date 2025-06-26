@@ -1,5 +1,5 @@
 import { supabase } from './client';
-import type { Subscription, Category, Currency } from '@/types';
+import type { Subscription, Category } from '@/types';
 
 // ❌ OLD VERSION - fetched ALL subscriptions
 // export const fetchSubscriptions = async (): Promise<Subscription[]> => {
@@ -158,20 +158,6 @@ export const fetchCategories = async (): Promise<Category[]> => {
 
   if (error) {
     console.error('Error fetching categories:', error);
-    throw error;
-  }
-
-  return data || [];
-};
-
-export const fetchCurrencies = async (): Promise<Currency[]> => {
-  const { data, error } = await supabase
-    .from('currencies')
-    .select('*')
-    .order('name', { ascending: true });
-
-  if (error) {
-    console.error('Error fetching currencies:', error);
     throw error;
   }
 

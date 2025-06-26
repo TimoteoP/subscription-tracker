@@ -6,8 +6,8 @@ import { useForm, type SubmitHandler } from "react-hook-form";
 import { z } from "zod";
 import { format, addDays, addMonths, addYears } from "date-fns";
 
-import { fetchCategories, fetchCurrencies } from "@/lib/supabase/db";
-import type { Subscription, Category, Currency } from "@/types";
+import { fetchCategories } from "@/lib/supabase/db";
+import type { Subscription, Category } from "@/types";
 
 /* ---------------- ZOD SCHEMA ---------------- */
 const subscriptionSchema = z.object({
@@ -47,7 +47,6 @@ export default function SubscriptionForm({
   onCancel,
 }: SubscriptionFormProps) {
   const [categories, setCategories] = useState<Category[]>([]);
-  const [currencies, setCurrencies] = useState<Currency[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   // --- Form handling
@@ -67,7 +66,6 @@ export default function SubscriptionForm({
       billing_cycle:
         (subscription?.billing_cycle as FormValues["billing_cycle"]) ?? "monthly",
       cost: subscription?.cost ?? 0,
-      currency_id: subscription?.currency_id ?? "",
       recurring: subscription?.recurring ?? true,
       reminder_days: subscription?.reminder_days ?? 7,
       end_date: subscription?.end_date ?? "",
@@ -99,9 +97,8 @@ export default function SubscriptionForm({
   useEffect(() => {
     (async () => {
       try {
-        const [cats, curs] = await Promise.all([fetchCategories(), fetchCurrencies()]);
+        const [cats] = await Promise.all([fetchCategories()]);
         setCategories(cats);
-        setCurrencies(curs);
       } catch (e) {
         console.error("Lookup load error:", e);
       } finally {
@@ -159,22 +156,6 @@ export default function SubscriptionForm({
           ))}
         </select>
         {errors.category_id && <p className="text-red-600 text-sm mt-1">{errors.category_id.message}</p>}
-      </div>
-
-      {/* Valuta */}
-      <div>
-        <label htmlFor="currency_id" className="block text-sm font-medium mb-1">Valuta</label>
-        <select
-          id="currency_id"
-          {...register("currency_id")}
-          className="w-full rounded-md border px-3 py-2"
-        >
-          <option value="">Seleziona valuta</option>
-          {currencies.map((cur) => (
-            <option key={cur.id} value={cur.id}>{cur.name}</option>
-          ))}
-        </select>
-        {errors.currency_id && <p className="text-red-600 text-sm mt-1">{errors.currency_id.message}</p>}
       </div>
 
       {/* Start date */}
