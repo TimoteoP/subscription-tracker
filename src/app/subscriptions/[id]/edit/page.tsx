@@ -11,90 +11,119 @@ import { Loader2, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 export default function EditSubscriptionPage() {
-  const { user } = useUser();
+  const { user, isLoading: isUserLoading } = useUser();
   const router = useRouter();
   const params = useParams();
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
 
   const [subscription, setSubscription] = useState<Subscription | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [pageLoading, setPageLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!id) return;
+    if (isUserLoading) {
+      // Aspetta che l'utente sia caricato prima di fare qualsiasi cosa
+      return;
+    }
+
+    if (!user) {
+      // Se dopo il caricamento l'utente non c'è, mostra errore
+      setError("Please log in to edit a subscription.");
+      setPageLoading(false);
+      return;
+    }
+
+    if (!id) {
+      setError("Subscription ID is missing from the URL.");
+      setPageLoading(false);
+      return;
+    }
+    
     const getSubscription = async () => {
       try {
         const data = await fetchSubscriptionById(id);
-        if (data.user_id !== user?.id) {
+        // Controllo di sicurezza: l'utente può modificare solo i suoi abbonamenti
+        if (data.user_id !== user.id) {
           setError("You don't have permission to edit this subscription.");
-          return;
+          setSubscription(null); // Assicurati che non vengano mostrati dati altrui
+        } else {
+          setSubscription(data);
         }
-        setSubscription(data);
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to fetch subscription.");
+        console.error("Failed to fetch subscription:", err);
+        setError(err instanceof Error ? err.message : "Could not find the subscription.");
       } finally {
-        setLoading(false);
+        setPageLoading(false);
       }
     };
-    if (user) {
-        getSubscription();
-    }
-  }, [id, user]);
+    
+    getSubscription();
+    
+  }, [id, user, isUserLoading]);
 
   const handleSubmit = async (values: any) => {
-    // 💡 LA CORREZIONE È QUI
     if (!id) {
-        setError("Cannot update: Subscription ID is missing.");
-        return; // Interrompi la funzione se l'ID non è presente
-      }
-      // A questo punto, TypeScript sa che 'id' non può essere undefined
-    setLoading(true);
+      setError("Error: Subscription ID is missing. Cannot update.");
+      return;
+    }
     setError(null);
+
     try {
       await updateSubscription(id, values);
+      // Reindirizza alla dashboard dopo il successo
       router.push('/dashboard');
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to update subscription");
-    } finally {
-      setLoading(false);
+      console.error("Failed to update subscription:", err);
+      setError(err instanceof Error ? err.message : "An unknown error occurred while updating.");
     }
   };
 
-  if (loading) {
+  // Stato di caricamento iniziale della pagina
+  if (pageLoading) {
     return (
-      <div className="flex justify-center items-center h-96">
+      <div className="flex flex-col justify-center items-center h-96">
         <Loader2 className="animate-spin h-8 w-8 text-muted-foreground" />
+        <p className="mt-4 text-muted-foreground">Loading subscription data...</p>
       </div>
     );
   }
   
+  // Stato di errore (ID mancante, permessi, etc.)
   if (error) {
      return (
-      <Card className="max-w-lg mx-auto mt-12">
+      <Card className="max-w-lg mx-auto mt-12 border-red-200 bg-red-50">
         <CardHeader>
-            <CardTitle className="text-red-600">Error</CardTitle>
+            <CardTitle className="text-red-700 flex items-center">
+                <AlertCircle className="h-6 w-6 mr-2" />
+                An Error Occurred
+            </CardTitle>
         </CardHeader>
-        <CardContent className="text-center">
-            <AlertCircle className="h-8 w-8 mx-auto mb-2 text-red-600" />
-            <p>{error}</p>
-            <Button onClick={() => router.push('/dashboard')} className="mt-4">Go to Dashboard</Button>
+        <CardContent className="text-center text-red-800">
+            <p className="mb-6">{error}</p>
+            <Button variant="destructive" onClick={() => router.push('/dashboard')}>
+                Return to Dashboard
+            </Button>
         </CardContent>
       </Card>
-     )
+     );
   }
 
+  // Se tutto è andato bene, mostra il form
   return (
     <Card className="max-w-xl mx-auto mt-12">
       <CardHeader>
         <CardTitle>Edit Subscription</CardTitle>
       </CardHeader>
       <CardContent>
-        {subscription && (
+        {subscription ? (
           <SubscriptionForm
             subscription={subscription}
             onSubmit={handleSubmit}
             onCancel={() => router.push('/dashboard')}
           />
+        ) : (
+          // Fallback nel caso improbabile che la subscription sia null senza un errore
+          <p>Could not load subscription data for editing.</p>
         )}
       </CardContent>
     </Card>
