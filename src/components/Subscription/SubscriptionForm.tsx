@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm, type SubmitHandler } from "react-hook-form";
 import { z } from "zod";
-import { format, add, setDate, isAfter, startOfDay } from "date-fns";
+import { format, add, setDate, isBefore, startOfDay } from "date-fns"; // Modificati gli import
 import { fetchCategories } from "@/lib/supabase/db";
 import type { Subscription, Category } from "@/types";
 import { Loader2 } from "lucide-react";
@@ -39,25 +39,24 @@ interface SubscriptionFormProps {
   onCancel: () => void;
 }
 
-// ... altri import ...
-
-// ✅ FUNZIONE DI CALCOLO CORRETTA E TYPESAFE
+// ✅ FUNZIONE CON IL TIPO CORRETTO
 const calculateNextBillingCycle = (firstDateStr: string, cycle: FormValues["billing_cycle"]): { startDate: string, endDate: string } => {
   if (!firstDateStr || !cycle) return { startDate: "", endDate: "" };
-  
+
   try {
-      const firstDate = new Date(firstDateStr);
+      const firstDate = startOfDay(new Date(firstDateStr));
       if (isNaN(firstDate.getTime())) return { startDate: "", endDate: "" };
 
       if (cycle === 'one-time') {
           const formattedDate = format(firstDate, "yyyy-MM-dd");
           return { startDate: formattedDate, endDate: formattedDate };
       }
-      
-      const today = startOfDay(new Date());
-      let nextBillingDate = setDate(new Date(today), firstDate.getDate());
 
-      const getCycleDuration = (): { months?: number, years?: number } => {
+      const today = startOfDay(new Date());
+      let currentPeriodEnd = new Date(firstDate);
+
+      // 💡 LA CORREZIONE È QUI: Definiamo il tipo di ritorno in linea
+      const getCycleDuration = (): { months?: number; years?: number } => {
           switch(cycle) {
               case 'monthly': return { months: 1 };
               case 'quarterly': return { months: 3 };
@@ -66,23 +65,26 @@ const calculateNextBillingCycle = (firstDateStr: string, cycle: FormValues["bill
               case 'triennial': return { years: 3 };
               default: return {};
           }
-      }
-      
-      // 💡 LA CORREZIONE È QUI
+      };
+
       const cycleDuration = getCycleDuration();
 
-      if (isAfter(today, nextBillingDate)) {
-          nextBillingDate = add(nextBillingDate, cycleDuration);
+      // Aggiungi un ciclo per trovare la data di fine del PRIMO periodo
+      currentPeriodEnd = add(currentPeriodEnd, cycleDuration);
+
+      // Ora, se questa data di fine è già passata, continua ad aggiungere cicli
+      while (isBefore(currentPeriodEnd, today)) {
+          currentPeriodEnd = add(currentPeriodEnd, cycleDuration);
       }
 
-      const cycleStartDate = add(nextBillingDate, {
-          months: -(cycleDuration.months || 0), // Usa il valore di default 0 se months è undefined
-          years: -(cycleDuration.years || 0)   // Usa il valore di default 0 se years è undefined
+      const currentPeriodStart = add(currentPeriodEnd, {
+          months: -(cycleDuration.months || 0),
+          years: -(cycleDuration.years || 0),
       });
-      
+
       return {
-          startDate: format(cycleStartDate, "yyyy-MM-dd"),
-          endDate: format(nextBillingDate, "yyyy-MM-dd")
+          startDate: format(currentPeriodStart, "yyyy-MM-dd"),
+          endDate: format(currentPeriodEnd, "yyyy-MM-dd"),
       };
   } catch {
       return { startDate: "", endDate: "" };
