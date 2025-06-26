@@ -1,13 +1,6 @@
 import { supabase } from './client';
 import type { Subscription, Category } from '@/types';
 
-// ❌ OLD VERSION - fetched ALL subscriptions
-// export const fetchSubscriptions = async (): Promise<Subscription[]> => {
-//   const { data, error } = await supabase
-//     .from('subscriptions')
-//     .select('*')
-//     .order('end_date', { ascending: true });
-
 // ✅ NEW VERSION - automatically filtered by RLS based on current user
 export const fetchSubscriptions = async (): Promise<Subscription[]> => {
   const { data, error } = await supabase
@@ -58,57 +51,68 @@ export const fetchSubscriptionById = async (id: string): Promise<Subscription> =
   return data;
 };
 
+// ✅ NUOVA VERSIONE di createSubscription
 export const createSubscription = async (
   subscription: Omit<Subscription, 'id' | 'created_at' | 'updated_at'>
 ): Promise<Subscription> => {
-  // Usa direttamente l'user_id passato dal componente chiamante
   if (!subscription.user_id) {
     throw new Error('User not authenticated');
   }
 
+  // Costruiamo l'oggetto da inserire, assicurandoci che tutti i campi ci siano
+  const newSubscriptionData = {
+    ...subscription,
+    status: 'active', // Impostiamo sempre come attivo all'inizio
+    // Questi campi potrebbero non arrivare più dal form, quindi diamo dei default
+    duration: subscription.duration || '1y', 
+    recurring: subscription.recurring !== undefined ? subscription.recurring : true,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+
   const { data, error } = await supabase
     .from('subscriptions')
-    .insert({
-      ...subscription,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    })
+    .insert(newSubscriptionData)
     .select()
     .single();
 
   if (error) {
-    console.error('Error creating subscription:', error);
+    console.error('Error creating subscription in DB:', error); // Log più dettagliato
     throw error;
   }
 
   if (!data) {
-    throw new Error('Failed to create subscription');
+    throw new Error('Failed to create subscription, no data returned.');
   }
 
   return data;
 };
 
+// ✅ NUOVA VERSIONE di updateSubscription
 export const updateSubscription = async (
   id: string, 
   updates: Partial<Omit<Subscription, 'id' | 'created_at' | 'user_id'>>
 ): Promise<Subscription> => {
+  
+  const updateData = {
+    ...updates,
+    updated_at: new Date().toISOString()
+  };
+
   const { data, error } = await supabase
     .from('subscriptions')
-    .update({ 
-      ...updates, 
-      updated_at: new Date().toISOString() 
-    })
+    .update(updateData)
     .eq('id', id)
     .select()
     .single();
 
   if (error) {
-    console.error('Error updating subscription:', error);
+    console.error('Error updating subscription in DB:', error); // Log più dettagliato
     throw error;
   }
 
   if (!data) {
-    throw new Error('Subscription not found');
+    throw new Error('Subscription not found for update');
   }
 
   return data;
